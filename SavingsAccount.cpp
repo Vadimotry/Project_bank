@@ -28,6 +28,6 @@ void SavingsAccount::DisplayInfo() const {
     std::cout << "Сберегательный счет, баланс: " << std::fixed << std::setprecision(2) << balance << ", Процентная ставка: " << std::fixed << std::setprecision(2) << interestRate << std::endl;
 }
 
-double SavingsAccount::GetInterestRate() const { // Реализация метода
+double SavingsAccount::GetInterestRate() const {
     return interestRate;
 }
