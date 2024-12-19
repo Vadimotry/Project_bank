@@ -5,13 +5,15 @@
 #include <iostream>
 
 class Customer {
-private:
-    std::string name;
-    std::string id;
 public:
-    Customer(const std::string& name, const std::string& id);
-    std::string GetName() const;
-    std::string GetId() const;
+    std::string name, id;
+private:
+    std::string passwordHash;
+public:
+    Customer(const std::string& n, const std::string& i, const std::string& p);
+    std::string getName() const;
+    std::string getId() const;
+    std::string getPasswordHash() const;
     void DisplayInfo() const;
 };
 
