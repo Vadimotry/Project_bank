@@ -7,26 +7,191 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <limits>
+
 
 Bank::Bank() {
+    if (customers.empty()) {
+        AddCustomer("admin", "123456789", "admin");
+    }
     LoadData();
 }
-
-shared_ptr<Customer> Bank::GetCustomer(int index) const {
-    if (index < 0 || index >= customers.size()) {
-        return nullptr;
-    }
-    return customers[index];
+Bank::~Bank() {
+    SaveData();
+}
+std::shared_ptr<Customer> Bank::GetCustomer(int index) const {
+    if (index < customers.size() && index >= 0)
+        return customers[index];
+    else return nullptr;
 }
 
-std::vector<std::shared_ptr<Customer>> Bank::SearchCustomer(const std::string& name) const {
-    std::vector<std::shared_ptr<Customer>> result;
+void Bank::AddCustomer(const std::string& name, const std::string& id, const std::string& password) {
+    customers.push_back(std::make_shared<Customer>(name, id, encryptCaesar(password)));
+}
+
+void Bank::AddAccount(std::shared_ptr<Account> account) {
+    accounts.push_back(account);
+}
+
+std::shared_ptr<Account> Bank::GetAccount(int index) const {
+    if (index < accounts.size() && index >= 0)
+        return accounts[index];
+    else return nullptr;
+}
+
+void Bank::ShowAccounts() const {
+    std::cout << "-------------------- Счета --------------------" << std::endl;
+    for (const auto& account : accounts) {
+        std::cout << *account;
+        std::cout << "------------------------------------------------" << std::endl;
+    }
+}
+
+void Bank::ShowCustomers() const {
+    std::cout << "------------------ Клиенты -------------------" << std::endl;
     for (const auto& customer : customers) {
-        if (customer->GetName() == name) {
-            result.push_back(customer);
+        customer->DisplayInfo();
+    }
+    std::cout << "------------------------------------------------" << std::endl;
+}
+bool Bank::ValidateLogin(const std::string& id, const std::string& password) const {
+    for (const auto& customer : customers) {
+        if (customer->getId() == id && decryptCaesar(customer->getPasswordHash()) == password)
+            return true;
+    }
+    return false;
+}
+
+void Bank::LoadData() {
+    std::ifstream cFile(CUSTOMERS_FILE);
+    if (!cFile.is_open()) {
+        throw std::runtime_error("Не удалось открыть файл клиентов для чтения: " + CUSTOMERS_FILE);
+    }
+    std::string line;
+    while (std::getline(cFile, line)) {
+        std::stringstream ss(line);
+        std::string name, id, hash;
+        if (!getline(ss, name, ',') || !getline(ss, id, ',') || !getline(ss, hash, ',')) {
+            cFile.close();
+            throw std::runtime_error("Ошибка формата данных в файле клиентов: " + CUSTOMERS_FILE);
+        }
+        customers.push_back(std::make_shared<Customer>(name, id, hash));
+    }
+    cFile.close();
+
+
+    std::ifstream aFile(ACCOUNTS_FILE);
+    if (!aFile.is_open()) {
+        throw std::runtime_error("Не удалось открыть файл счетов для чтения: " + ACCOUNTS_FILE);
+    }
+    while (std::getline(aFile, line)) {
+        std::stringstream ss(line);
+        std::string typeStr;
+        double bal;
+        std::string ex;
+
+        if (!getline(ss, typeStr, ',') || !(ss >> bal) || (ss.peek() == ',' && !getline(ss, ex, ','))) {
+            aFile.close();
+            throw std::runtime_error("Ошибка формата данных в файле счетов: " + ACCOUNTS_FILE);
+        }
+        try {
+            if (typeStr == "1") AddAccount(std::make_shared<SavingsAccount>(bal, std::stod(ex)));
+            else if (typeStr == "2") AddAccount(std::make_shared<CheckingAccount>(bal, std::stod(ex)));
+            else if (typeStr == "3") AddAccount(std::make_shared<BusinessAccount>(bal));
+        }
+        catch (const std::invalid_argument& e) {
+            aFile.close();
+            throw std::runtime_error("Неверный формат данных в файле счетов: " + ACCOUNTS_FILE);
         }
     }
-    return result;
+    aFile.close();
+}
+
+void Bank::SaveData() const {
+    std::ofstream cFile(CUSTOMERS_FILE);
+    if (!cFile.is_open()) {
+        throw std::runtime_error("Не удалось открыть файл клиентов для записи: " + CUSTOMERS_FILE);
+    }
+    for (const auto& c : customers)
+        cFile << c->name << "," << c->id << "," << c->getPasswordHash() << std::endl;
+    cFile.close();
+
+    std::ofstream aFile(ACCOUNTS_FILE);
+    if (!aFile.is_open()) {
+        throw std::runtime_error("Не удалось открыть файл счетов для записи: " + ACCOUNTS_FILE);
+    }
+    for (const auto& account : accounts) {
+        if (auto savings = std::dynamic_pointer_cast<SavingsAccount>(account))
+            aFile << "1," << std::fixed << std::setprecision(2) << savings->GetBalance() << "," << std::fixed << std::setprecision(2) << savings->GetInterestRate() << std::endl;
+        else if (auto checking = std::dynamic_pointer_cast<CheckingAccount>(account))
+            aFile << "2," << std::fixed << std::setprecision(2) << checking->GetBalance() << "," << std::fixed << std::setprecision(2) << checking->GetOverdraftLimit() << std::endl;
+        else if (auto business = std::dynamic_pointer_cast<BusinessAccount>(account))
+            aFile << "3," << std::fixed << std::setprecision(2) << business->GetBalance() << "," << std::endl;
+    }
+    aFile.close();
+}
+void Bank::Transfer(int fromIndex, int toIndex, double amount) {
+    std::shared_ptr<Account> fromAccount = GetAccount(fromIndex);
+    std::shared_ptr<Account> toAccount = GetAccount(toIndex);
+    if (fromAccount && toAccount) {
+        if (fromAccount->GetBalance() >= amount) {
+            fromAccount->Withdraw(amount);
+            toAccount->Deposit(amount);
+            std::cout << "Перевод: " << std::fixed << std::setprecision(2) << amount << " выполнен со счета #"
+                << fromIndex << " на счет #" << toIndex << std::endl;
+        }
+        else {
+            std::cout << "Недостаточно средств для перевода!" << std::endl;
+        }
+    }
+    else {
+        std::cout << "Некорректные счета для перевода!" << std::endl;
+    }
+}
+void Bank::ApplyInterestToAllSavings() {
+    std::cout << "--- Начисление процентов на сберегательные счета ---" << std::endl;
+    for (const auto& account : accounts) {
+        if (std::dynamic_pointer_cast<SavingsAccount>(account)) {
+            std::dynamic_pointer_cast<SavingsAccount>(account)->ApplyInterest();
+        }
+    }
+}
+
+void Bank::ShowAccountInfo(int index) const {
+    std::shared_ptr<Account> account = GetAccount(index);
+    if (account) {
+        std::cout << "------- Информация об аккаунте #" << index << " -------" << std::endl;
+        account->DisplayInfo();
+        std::cout << "------------------------------------------------" << std::endl;
+    }
+    else {
+        std::cout << "Аккаунт не найден!" << std::endl;
+    }
+}
+
+double Bank::CalculateTotalAssets() const {
+    double total = 0;
+    for (const auto& account : accounts) {
+        total += account->GetBalance();
+    }
+    return total;
+}
+
+void Bank::SortAccountsByBalance() {
+    std::sort(accounts.begin(), accounts.end(), [](const auto& a, const auto& b) {
+        return a->GetBalance() < b->GetBalance();
+        });
+    std::cout << "Счета отсортированы по балансу (от меньшего к большему)." << std::endl;
+}
+
+void Bank::WithdrawFromAccount(int index, double amount) {
+    std::shared_ptr<Account> account = GetAccount(index);
+    if (account) {
+        account->Withdraw(amount);
+    }
+    else {
+        std::cout << "Аккаунт не найден!" << std::endl;
+    }
 }
 
 void Bank::DeleteCustomer(int index) {
@@ -36,8 +201,13 @@ void Bank::DeleteCustomer(int index) {
     }
 
     bool hasAccounts = false;
-    hasAccounts = false;
-
+    for (const auto& account : accounts) {
+        // Add logic to check if account belongs to the customer
+        if (true) {
+            hasAccounts = true;
+            break;
+        }
+    }
     if (hasAccounts) {
         std::cout << "Нельзя удалить клиента, т.к. у него есть открытые счета." << std::endl;
     }
@@ -63,212 +233,39 @@ void Bank::DeleteAccount(int index) {
     }
 }
 
-double Bank::CalculateTotalAssets() const {
-    double total = 0;
-    for (const auto& account : accounts) {
-        total += account->GetBalance();
-    }
-    return total;
-}
 
-void Bank::SortAccountsByBalance() {
-    std::sort(accounts.begin(), accounts.end(), [](const auto& a, const auto& b) {
-        return a->GetBalance() < b->GetBalance();
-        });
-    std::cout << "Счета отсортированы по балансу (от меньшего к большему)." << std::endl;
-}
-
-
-void Bank::AddCustomer(const std::string& name, const std::string& id) {
-    customers.push_back(std::make_shared<Customer>(name, id));
-}
-
-void Bank::AddAccount(std::shared_ptr<Account> account) {
-    accounts.push_back(account);
-}
-
-std::shared_ptr<Account> Bank::GetAccount(int index) const {
-    if (index < 0 || index >= accounts.size()) {
-        return nullptr;
-    }
-    return accounts[index];
-}
-
-void Bank::ShowAccounts() const {
-    std::cout << "-------------------- Счета --------------------" << std::endl;
-    for (const auto& account : accounts) {
-        std::cout << *account;
-        std::cout << "------------------------------------------------" << std::endl;
-    }
-}
-
-void Bank::ShowCustomers() const {
-    std::cout << "------------------ Клиенты -------------------" << std::endl;
-    for (const auto& customer : customers) {
-        customer->DisplayInfo();
-    }
-    std::cout << "------------------------------------------------" << std::endl;
-}
-
-
-void Bank::Transfer(std::shared_ptr<Account> from, std::shared_ptr<Account> to, double amount) {
-    if (from && to) {
-        if (from->GetBalance() >= amount) {
-            from->Withdraw(amount);
-            to->Deposit(amount);
-            std::cout << "Перевод: " << std::fixed << std::setprecision(2) << amount << " выполнен." << std::endl;
+std::string Bank::encryptCaesar(const std::string& text) const {
+    std::string result = "";
+    for (char c : text) {
+        if (isalpha(c)) {
+            char base = islower(c) ? 'a' : 'A';
+            result += (char)((c - base + shift) % 26 + base);
+        }
+        else if (isdigit(c)) {
+            result += (char)((c - '0' + shift) % 10 + '0');
         }
         else {
-            std::cout << "Недостаточно средств для перевода!" << std::endl;
+            result += c;
         }
     }
-    else {
-        std::cout << "Некорректные счета для перевода!" << std::endl;
-    }
+    return result;
 }
 
-void Bank::ShowAccountInfo(int index) const {
-    std::shared_ptr<Account> account = GetAccount(index);
-    if (account) {
-        std::cout << "------- Информация об аккаунте #" << index << " -------" << std::endl;
-        account->DisplayInfo();
-        std::cout << "------------------------------------------------" << std::endl;
-    }
-    else {
-        std::cout << "Аккаунт не найден!" << std::endl;
-    }
-}
-
-void Bank::DepositToAccount(int index, double amount) {
-    std::shared_ptr<Account> account = GetAccount(index);
-    if (account) {
-        account->Deposit(amount);
-    }
-    else {
-        std::cout << "Аккаунт не найден!" << std::endl;
-    }
-}
-
-void Bank::WithdrawFromAccount(int index, double amount) {
-    std::shared_ptr<Account> account = GetAccount(index);
-    if (account) {
-        account->Withdraw(amount);
-    }
-    else {
-        std::cout << "Аккаунт не найден!" << std::endl;
-    }
-}
-
-void Bank::ApplyInterestToSavings() {
-    std::cout << "--- Начисление процентов на сберегательные счета ---" << std::endl;
-    for (const auto& account : accounts) {
-        if (std::dynamic_pointer_cast<SavingsAccount>(account)) {
-            std::dynamic_pointer_cast<SavingsAccount>(account)->ApplyInterest();
+std::string Bank::decryptCaesar(const std::string& text) const {
+    std::string result = "";
+    for (char c : text) {
+        if (isalpha(c)) {
+            char base = islower(c) ? 'a' : 'A';
+            result += (char)((c - base - shift + 26) % 26 + base);
         }
-    }
-}
-
-void Bank::UpdateOverdraftLimit(int index, double newLimit) {
-    std::shared_ptr<CheckingAccount> account = std::dynamic_pointer_cast<CheckingAccount>(GetAccount(index));
-    if (account) {
-        account->SetOverdraftLimit(newLimit);
-    }
-    else {
-        std::cout << "Аккаунт не найден или не является расчетным!" << std::endl;
-    }
-}
-
-void Bank::Transfer(int fromIndex, int toIndex, double amount) {
-    std::shared_ptr<Account> fromAccount = GetAccount(fromIndex);
-    std::shared_ptr<Account> toAccount = GetAccount(toIndex);
-
-    if (fromAccount && toAccount) {
-        if (fromAccount->GetBalance() >= amount) {
-            fromAccount->Withdraw(amount);
-            toAccount->Deposit(amount);
-            std::cout << "Перевод: " << std::fixed << std::setprecision(2) << amount << " выполнен со счета #"
-                << fromIndex << " на счет #" << toIndex << std::endl;
+        else if (isdigit(c)) {
+            result += (char)((c - '0' - shift + 10) % 10 + '0');
         }
         else {
-            std::cout << "Недостаточно средств для перевода!" << std::endl;
+            result += c;
         }
     }
-    else {
-        std::cout << "Некорректные счета для перевода!" << std::endl;
-    }
-}
-
-
-void Bank::LoadData() {
-    std::ifstream customersFile(CUSTOMERS_FILE);
-    if (customersFile.is_open()) {
-        std::string line;
-        while (std::getline(customersFile, line)) {
-            std::stringstream ss(line);
-            std::string name, id;
-            std::getline(ss, name, ',');
-            std::getline(ss, id, ',');
-            AddCustomer(name, id);
-        }
-        customersFile.close();
-    }
-
-    std::ifstream accountsFile(ACCOUNTS_FILE);
-    if (accountsFile.is_open()) {
-        std::string line;
-        while (std::getline(accountsFile, line)) {
-            std::stringstream ss(line);
-            std::string typeStr;
-            double balance;
-            std::string extraValueStr; // Для процентной ставки или лимита
-
-            std::getline(ss, typeStr, ',');
-            ss >> balance;
-            if (ss.peek() == ',') ss.ignore();
-            std::getline(ss, extraValueStr, ',');
-
-
-
-            if (typeStr == "1") {
-                double interestRate = std::stod(extraValueStr);
-                AddAccount(std::make_shared<SavingsAccount>(balance, interestRate));
-            }
-            else if (typeStr == "2") {
-                double overdraftLimit = std::stod(extraValueStr);
-                AddAccount(std::make_shared<CheckingAccount>(balance, overdraftLimit));
-            }
-            else if (typeStr == "3") {
-                AddAccount(std::make_shared<BusinessAccount>(balance));
-            }
-        }
-        accountsFile.close();
-    }
-}
-
-void Bank::SaveData() const {
-    std::ofstream customersFile(CUSTOMERS_FILE);
-    if (customersFile.is_open()) {
-        for (const auto& customer : customers) {
-            customersFile << customer->GetName() << "," << customer->GetId() << std::endl;
-        }
-        customersFile.close();
-    }
-
-    std::ofstream accountsFile(ACCOUNTS_FILE);
-    if (accountsFile.is_open()) {
-        for (const auto& account : accounts) {
-            if (auto savings = std::dynamic_pointer_cast<SavingsAccount>(account)) {
-                accountsFile << "1," << std::fixed << std::setprecision(2) << savings->GetBalance() << "," << std::fixed << std::setprecision(2) << savings->GetInterestRate() << std::endl;
-            }
-            else if (auto checking = std::dynamic_pointer_cast<CheckingAccount>(account)) {
-                accountsFile << "2," << std::fixed << std::setprecision(2) << checking->GetBalance() << "," << std::fixed << std::setprecision(2) << checking->GetOverdraftLimit() << std::endl;
-            }
-            else if (auto business = std::dynamic_pointer_cast<BusinessAccount>(account)) {
-                accountsFile << "3," << std::fixed << std::setprecision(2) << business->GetBalance() << "," << std::endl;
-            }
-        }
-        accountsFile.close();
-    }
+    return result;
 }
 
 bool isValidId(const std::string& id) {
