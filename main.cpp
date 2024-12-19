@@ -3,81 +3,125 @@
 #include "SavingsAccount.h"
 #include "CheckingAccount.h"
 #include "BusinessAccount.h"
+#include <limits>
 #include <iomanip>
+#ifdef _WIN32
+#define CLEAR "cls"
+#else
+#define CLEAR "clear"
+#endif
 
+using namespace std;
+
+void clearScreen() {
+    system(CLEAR);
+}
 
 int main() {
     setlocale(LC_ALL, "rus");
 
     Bank bank;
+    string id, password;
+    
+    if (bank.GetCustomer(0) == nullptr) {
+        cout << "Система не содержит пользователей. Создайте первого пользователя." << endl;
+        string name, id, password;
+        cout << "Введите имя клиента: ";
+        cin >> name;
+        do {
+            cout << "Введите ID клиента (ровно 9 чисел): ";
+            cin >> id;
+            if (!isValidId(id)) {
+                cout << "Ошибка: ID должен состоять ровно из 9 цифр!" << endl;
+            }
+        } while (!isValidId(id));
+        cout << "Введите пароль: ";
+        cin >> password;
+        bank.AddCustomer(name, id, password);
 
+        cout << "Пользователь создан, войдите в систему" << endl;
+    }
+
+    cout << "Введите ID: ";
+    cin >> id;
+    cout << "Введите пароль: ";
+    cin >> password;
+
+
+    if (!bank.ValidateLogin(id, password)) {
+        cout << "Неверный логин или пароль!" << endl;
+        return 0;
+    }
+    cout << "Вход выполнен!" << endl;
     int choice;
     do {
-        std::cout << "\n----- Меню -----" << std::endl;
-        std::cout << "1. Добавить клиента" << std::endl;
-        std::cout << "2. Добавить аккаунт" << std::endl;
-        std::cout << "3. Показать клиентов" << std::endl;
-        std::cout << "4. Показать счета" << std::endl;
-        std::cout << "5. Удалить клиента" << std::endl;
-        std::cout << "6. Удалить счет" << std::endl;
-        std::cout << "7. Вывести общий баланс" << std::endl;
-        std::cout << "8. Сортировать счета по балансу" << std::endl;
-        std::cout << "9. Показать информацию об аккаунте" << std::endl;
-        std::cout << "10. Внести деньги на счет" << std::endl;
-        std::cout << "11. Снять деньги со счета" << std::endl;
-        std::cout << "12. Начислить проценты на сберегательные счета" << std::endl;
-        std::cout << "13. Обновить лимит овердрафта" << std::endl;
-        std::cout << "14. Перевести деньги между счетами" << std::endl;
-        std::cout << "0. Выйти и сохранить" << std::endl;
-        std::cout << "Выберите действие: ";
-        std::cin >> choice;
+        clearScreen();
+        cout << "\n----- Меню -----" << endl;
+        cout << "1. Добавить клиента" << endl;
+        cout << "2. Добавить аккаунт" << endl;
+        cout << "3. Показать клиентов" << endl;
+        cout << "4. Показать счета" << endl;
+        cout << "5. Удалить клиента" << endl;
+        cout << "6. Удалить счет" << endl;
+        cout << "7. Вывести общий баланс" << endl;
+        cout << "8. Сортировать счета по балансу" << endl;
+        cout << "9. Показать информацию об аккаунте" << endl;
+        cout << "10. Внести деньги на счет" << endl;
+        cout << "11. Снять деньги со счета" << endl;
+        cout << "12. Начислить проценты на сберегательные счета" << endl;
+        cout << "13. Перевести деньги между счетами" << endl;
+        cout << "0. Выйти" << endl;
+        cout << "Выберите действие: ";
+        cin >> choice;
 
         switch (choice) {
         case 1: {
-            std::string name, id;
-            std::cout << "Введите имя клиента: ";
-            std::cin >> name;
+            string name, id, password;
+            cout << "Введите имя клиента: ";
+            cin >> name;
             do {
-                std::cout << "Введите ID клиента (ровно 9 чисел): ";
-                std::cin >> id;
+                cout << "Введите ID клиента (ровно 9 чисел): ";
+                cin >> id;
                 if (!isValidId(id)) {
-                    std::cout << "Ошибка: ID должен состоять ровно из 9 цифр!" << std::endl;
+                    cout << "Ошибка: ID должен состоять ровно из 9 цифр!" << endl;
                 }
             } while (!isValidId(id));
-            bank.AddCustomer(name, id);
+            cout << "Введите пароль: ";
+            cin >> password;
+            bank.AddCustomer(name, id, password);
             break;
         }
         case 2: {
             double initialBalance;
             int accountType;
-            std::cout << "Введите начальный баланс для аккаунта: ";
-            std::cin >> initialBalance;
+            cout << "Введите начальный баланс для аккаунта: ";
+            cin >> initialBalance;
             while (true) {
-                std::cout << "Введите тип аккаунта (1-Сберегательный, 2-Расчетный, 3-Бизнес): ";
-                std::cin >> accountType;
+                cout << "Введите тип аккаунта (1-Сберегательный, 2-Расчетный, 3-Бизнес): ";
+                cin >> accountType;
 
                 if (accountType >= 1 && accountType <= 3) {
                     break;
                 }
                 else {
-                    std::cout << "Такого варианта нет, попробуйте заново." << std::endl;
+                    cout << "Такого варианта нет, попробуйте заново." << endl;
                 }
             }
 
             if (accountType == 1) {
                 double interestRate;
-                std::cout << "Введите процентную ставку: ";
-                std::cin >> interestRate;
-                bank.AddAccount(std::make_shared<SavingsAccount>(initialBalance, interestRate));
+                cout << "Введите процентную ставку: ";
+                cin >> interestRate;
+                bank.AddAccount(make_shared<SavingsAccount>(initialBalance, interestRate));
             }
             else if (accountType == 2) {
                 double overdraftLimit;
-                std::cout << "Введите лимит овердрафта (максимальная сумма, на которую можно уходить в минус.): ";
-                std::cin >> overdraftLimit;
-                bank.AddAccount(std::make_shared<CheckingAccount>(initialBalance, overdraftLimit));
+                cout << "Введите лимит овердрафта (максимальная сумма, на которую можно уходить в минус.): ";
+                cin >> overdraftLimit;
+                bank.AddAccount(make_shared<CheckingAccount>(initialBalance, overdraftLimit));
             }
             else if (accountType == 3) {
-                bank.AddAccount(std::make_shared<BusinessAccount>(initialBalance));
+                bank.AddAccount(make_shared<BusinessAccount>(initialBalance));
             }
             break;
         }
@@ -91,22 +135,22 @@ int main() {
         }
         case 5: {
             int index;
-            std::cout << "Введите индекс клиента для удаления: ";
-            std::cin >> index;
+            cout << "Введите индекс клиента для удаления: ";
+            cin >> index;
             bank.DeleteCustomer(index);
             break;
         }
         case 6: {
             int index;
-            std::cout << "Введите индекс счета для удаления: ";
-            std::cin >> index;
+            cout << "Введите индекс счета для удаления: ";
+            cin >> index;
             bank.DeleteAccount(index);
             break;
         }
         case 7: {
-            std::cout << "------------------------------------------------" << std::endl;
-            std::cout << "Всего средств в банке: " << std::fixed << std::setprecision(2) << bank.CalculateTotalAssets() << std::endl;
-            std::cout << "------------------------------------------------" << std::endl;
+            cout << "------------------------------------------------" << endl;
+            cout << "Всего средств в банке: " << fixed << setprecision(2) << bank.CalculateTotalAssets() << endl;
+            cout << "------------------------------------------------" << endl;
             break;
         }
         case 8: {
@@ -115,69 +159,55 @@ int main() {
         }
         case 9: {
             int index;
-            std::cout << "Введите индекс аккаунта для просмотра информации: ";
-            std::cin >> index;
+            cout << "Введите индекс аккаунта для просмотра информации: ";
+            cin >> index;
             bank.ShowAccountInfo(index);
             break;
         }
         case 10: {
             int index;
             double amount;
-            std::cout << "Введите индекс аккаунта для пополнения: ";
-            std::cin >> index;
-            std::cout << "Введите сумму для внесения: ";
-            std::cin >> amount;
-            bank.DepositToAccount(index, amount);
+            cout << "Введите индекс аккаунта для пополнения: ";
+            cin >> index;
+            cout << "Введите сумму для внесения: ";
+            cin >> amount;
+            auto account = bank.GetAccount(index);
+            if (account) {
+                account->Deposit(amount);
+            }
+            else {
+                cout << "Аккаунт не найден!" << endl;
+            }
             break;
         }
         case 11: {
             int index;
             double amount;
-            std::cout << "Введите индекс аккаунта для снятия: ";
-            std::cin >> index;
-            std::cout << "Введите сумму для снятия: ";
-            std::cin >> amount;
+            cout << "Введите индекс аккаунта для снятия: ";
+            cin >> index;
+            cout << "Введите сумму для снятия: ";
+            cin >> amount;
             bank.WithdrawFromAccount(index, amount);
             break;
         }
         case 12: {
-            bank.ApplyInterestToSavings();
+            bank.ApplyInterestToAllSavings();
             break;
         }
         case 13: {
-            int index;
-            double newLimit;
-            std::cout << "Введите индекс расчетного счета для изменения лимита овердрафта: ";
-            std::cin >> index;
-            std::cout << "Введите новый лимит овердрафта: ";
-            std::cin >> newLimit;
-            bank.UpdateOverdraftLimit(index, newLimit);
-            break;
-        }
-        case 14: {
             int fromIndex, toIndex;
             double amount;
-            std::cout << "Введите индекс счета, с которого нужно перевести деньги: ";
-            std::cin >> fromIndex;
-            std::cout << "Введите индекс счета, на который нужно перевести деньги: ";
-            std::cin >> toIndex;
-            std::cout << "Введите сумму для перевода: ";
-            std::cin >> amount;
+            cout << "Введите индекс счета, с которого нужно перевести деньги: ";
+            cin >> fromIndex;
+            cout << "Введите индекс счета, на который нужно перевести деньги: ";
+            cin >> toIndex;
+            cout << "Введите сумму для перевода: ";
+            cin >> amount;
             bank.Transfer(fromIndex, toIndex, amount);
             break;
         }
-        case 0: {
-            std::cout << "Сохранение и выход..." << std::endl;
-            bank.SaveData();
-            break;
-        }
 
-        default: {
-            std::cout << "Неверный выбор. Попробуйте снова." << std::endl;
-            break;
-        }
         }
     } while (choice != 0);
-
     return 0;
 }
